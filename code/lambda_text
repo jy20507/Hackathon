@@ -1,0 +1,111 @@
+import json
+import boto3
+
+# Initialize Bedrock and Lambda clients outside the handler
+bedrock = boto3.client("bedrock-runtime")
+lambda_client = boto3.client("lambda")
+
+def lambda_handler(event, context):
+    try:
+        body = json.loads(event["body"])
+        fan_input = body.get("input", "")
+
+        if not fan_input:
+            return {
+                "statusCode": 400,
+                "headers": cors_headers(),
+                "body": json.dumps({"error": "粉絲的訊息在哪裡呀？沒看到欸！"}, ensure_ascii=False) 
+            }
+
+        # Step 1: 生成 Eden 回應文本
+        persona_prompt = f"""
+        你是FEniX的陳峻廷 (Eden)，生日1998/3/24，稱粉絲為潛廷寶。
+        個性幽默、親和，模特兒及戲劇科背景，舞台表現成熟，愛團體生活。
+        請以Eden的搞笑、關心風格，自然回應粉絲訊息，
+        回應要簡短，控制在70個字以內，保持幽默和親和！
+        粉絲訊息：{fan_input}
+        """
+
+        payload = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": persona_prompt
+                }
+            ],
+            "max_tokens": 100,
+            "temperature": 0.8,
+            "anthropic_version": "bedrock-2023-05-31"
+        }
+
+        response = bedrock.invoke_model(
+            modelId="anthropic.claude-3-sonnet-20240229-v1:0",
+            body=json.dumps(payload),
+            contentType="application/json",
+            accept="application/json"
+        )
+
+        result = json.loads(response["body"].read())
+
+        if "content" in result and isinstance(result["content"], list) and len(result["content"]) > 0 and "text" in result["content"][0]:
+            eden_response_text = result["content"][0]["text"]
+        else:
+            print(f"Unexpected response format from Bedrock: {result}")
+            eden_response_text = "哎呀，我好像有點秀逗了，你剛剛說什麼？再說一次給我聽聽？"
+
+        # Step 2: 呼叫 Lambda B，把 Eden 回應變成語音
+        lambda_b_response = lambda_client.invoke(
+            FunctionName='generateVoice', 
+            InvocationType='RequestResponse',
+            Payload=json.dumps({
+                "body": json.dumps({
+                    "text": eden_response_text
+                })
+            }, ensure_ascii=False) 
+        )
+
+        lambda_b_result = json.loads(lambda_b_response['Payload'].read())
+
+        # 先把 body 字串再解一次
+        if "body" not in lambda_b_result:
+            raise Exception("Lambda B 回傳格式錯誤，缺少 body！")
+
+        body_json = json.loads(lambda_b_result["body"])
+
+        if "audio_url" not in body_json:
+            raise Exception("Lambda B 回傳格式錯誤，缺少 audio_url！")
+
+        audio_url = body_json["audio_url"]
+
+
+        # Step 3: 把結果回給前端
+        return {
+            "statusCode": 200,
+            "headers": cors_headers(),
+            "body": json.dumps({
+                "text": eden_response_text,
+                "audio_url": audio_url
+            }, ensure_ascii=False) 
+        }
+
+    except json.JSONDecodeError:
+        return {
+            "statusCode": 400,
+            "headers": cors_headers(),
+            "body": json.dumps({"error": "訊息格式怪怪的喔，我看不懂啦～"}, ensure_ascii=False) 
+        }
+    except Exception as e:
+        print(f"Error: {e}")
+        return {
+            "statusCode": 500,
+            "headers": cors_headers(),
+            "body": json.dumps({"error": "糟糕，系統好像出了點小狀況，稍等一下再試試看？"}, ensure_ascii=False) 
+        }
+
+def cors_headers():
+    return {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type"
+    }
