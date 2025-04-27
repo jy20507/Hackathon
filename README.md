@@ -15,4 +15,4 @@
   - CloudFront  
   - API Gateway  
 2. 虛擬人  
-  - Musetalk:利用提供的企業數據和生成的語音進行合成，建立虛擬偶像。  
+  - Musetalk:利用提供的企業數據和生成的語音(放在data中)進行合成，建立虛擬偶像。  
