@@ -1,5 +1,5 @@
 # Hackathon
-*AWS_Hackathon*
+*AWS_Hackathon_of_AI_Idol*
 
 ## AWS工具架構  
 1. 智慧聊天語音系統  
@@ -9,4 +9,4 @@
   - CloudFront  
   - API Gateway  
 2. 虛擬人  
-  - Musetalk  
+  - Musetalk:利用提供的企業數據和生成的語音進行合成，建立虛擬偶像。  
